@@ -1,13 +1,15 @@
-import sys
-from pathlib import Path
+
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget, QWidget, QFrame,
     QPushButton, QLabel
 )
 from PySide6.QtGui import QIcon, QFont
 from PySide6.QtCore import Qt, QPropertyAnimation, QRect
+import subprocess
 import sys
 from pathlib import Path
+
+
 
 sys.path.append(str(Path(__file__).resolve().parent))
 
@@ -26,9 +28,9 @@ from pages.settings import SettingsPage
 from pages.signin import SignInDialog
 from pages.faq import FAQPage
 
-from backend.fox_pet import start_fox_pet   # ✅ 引入后端启动函数
-
 from PySide6.QtWidgets import QDialog
+
+
 
 APP_DIR = Path(__file__).parent
 
@@ -65,13 +67,14 @@ class MainWindow(QMainWindow):
             index = list(self.pages.keys()).index(route)
             self.stack.setCurrentIndex(index)
 
+        
         home = HomePage(
             on_menu=self.toggle_menu,
             on_settings=lambda: goto(Route.SETTINGS),
             on_close=self.close,
             on_go_fox=lambda: goto(Route.FOX),
             on_go_weekly=lambda: goto(Route.WEEKLY),
-            on_fox_it=lambda: self.start_fox() 
+            on_fox_it=lambda: self.start_backend_and_exit()
         )
         home.on_signin = self.open_signin_dialog
 
@@ -290,9 +293,17 @@ class MainWindow(QMainWindow):
         # 回到 Home
         self.stack.setCurrentIndex(list(self.pages.keys()).index(Route.HOME))
         
-    def start_fox(self):
-        # 启动桌宠（返回 pet 和 timer）
-        self.pet, self.timer = start_fox_pet()
+    def start_backend_and_exit(self):
+        """Close the frontend and start the backend run.py."""
+        backend_path = Path(__file__).resolve().parent.parent / "backend" / "run.py"
+        print("🚀 Launching backend:", backend_path)
+
+        # Launch backend in a separate process
+        subprocess.Popen([sys.executable, str(backend_path)], shell=False)
+
+        # Close frontend cleanly
+        QApplication.quit()
+
 
 
 
