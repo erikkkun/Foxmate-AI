@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
@@ -6,7 +7,13 @@ from PySide6.QtGui import QPainter, QLinearGradient, QColor, QBrush, QPixmap
 from PySide6.QtCore import Qt, QEasingCurve, QPropertyAnimation, QRect
 from PySide6.QtWidgets import QGraphicsDropShadowEffect
 
-APP_DIR = Path(__file__).resolve().parents[1]
+# Support PyInstaller bundled path
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable
+    APP_DIR = Path(sys._MEIPASS) / 'frontend'
+else:
+    # Running as script
+    APP_DIR = Path(__file__).resolve().parents[1]
 ASSETS = APP_DIR / "assets"
 
 

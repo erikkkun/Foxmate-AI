@@ -1,11 +1,31 @@
 # backend/pet_ui.py
-import os, math, time
+import os, math, time, threading, sys
+from pathlib import Path
 from PySide6.QtWidgets import QWidget, QLabel, QMenu, QProgressBar, QApplication
 from PySide6.QtGui import QPixmap, QAction
 from PySide6.QtCore import Qt, QPoint, QTimer
 
-BASE_DIR = os.path.dirname(__file__)
-IMG = lambda name: os.path.join(BASE_DIR, "images", name)
+# 声音效果支持 - Support PyInstaller bundled path
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable
+    BASE_DIR = Path(sys._MEIPASS) / 'backend'
+    PROJECT_ROOT = Path(sys._MEIPASS)  # 项目根目录（在打包后的位置）
+else:
+    # Running as script
+    BASE_DIR = Path(__file__).parent
+    PROJECT_ROOT = BASE_DIR.parent  # 项目根目录
+
+ALERT_SOUND_FILE = str(PROJECT_ROOT / "notification-alert-269289.mp3")
+
+# 尝试使用Windows COM对象播放MP3
+try:
+    import win32com.client
+    SOUND_AVAILABLE = True
+except ImportError:
+    SOUND_AVAILABLE = False
+    print("⚠️ win32com not available. Trying alternative methods...")
+
+IMG = lambda name: str(BASE_DIR / "images" / name)
 
 # 按区间映射的占位图文件名（放在 backend/images/ 目录）
 FOX_FILES = {
@@ -266,3 +286,93 @@ class FloatingPet(QWidget):
         # ✅ 调整气泡位置，让它在狐狸头顶上方
         self.speech.move(self.fox.x() + 20, self.fox.y())
         QTimer.singleShot(8000, self.speech.hide)
+    
+    def play_alert_sound(self):
+        """播放专注度提醒声音效果 - 使用MP3文件（无窗口）"""
+        def play_sound():
+            try:
+                import platform
+                
+                # 检查MP3文件是否存在
+                sound_path = os.path.abspath(ALERT_SOUND_FILE)
+                if not os.path.exists(sound_path):
+                    print(f"⚠️ Alert sound file not found: {sound_path}")
+                    print(f"   Looking in: {os.path.dirname(sound_path)}")
+                    return
+                
+                if platform.system() == 'Windows':
+                    # 方法1: 使用Windows Media Player COM对象（无窗口播放）
+                    if SOUND_AVAILABLE:
+                        try:
+                            wmp = win32com.client.Dispatch("WMPlayer.OCX")
+                            # 设置为不可见模式
+                            wmp.settings.autoStart = True
+                            wmp.settings.volume = 100  # 设置音量
+                            wmp.settings.mute = False
+                            wmp.settings.enableErrorDialogs = False
+                            
+                            # 隐藏UI窗口 - 使用uiMode属性
+                            try:
+                                wmp.uiMode = "none"  # 无UI模式
+                            except:
+                                # 如果uiMode不可用，尝试其他方法
+                                pass
+                            
+                            # 播放文件
+                            wmp.URL = sound_path
+                            wmp.controls.play()
+                            
+                            # 等待播放完成（在后台线程中，非阻塞）
+                            # 使用异步方式，不阻塞主线程
+                            def wait_and_cleanup():
+                                try:
+                                    while wmp.playState != 1:  # 1 = stopped
+                                        time.sleep(0.1)
+                                    wmp.controls.stop()
+                                    wmp.close()
+                                except:
+                                    pass
+                            
+                            # 在另一个线程中等待和清理
+                            cleanup_thread = threading.Thread(target=wait_and_cleanup, daemon=True)
+                            cleanup_thread.start()
+                            
+                            # 静默播放，不打印成功信息
+                            return
+                        except Exception as e1:
+                            print(f"⚠️ WMP COM failed: {e1}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # 方法2: 使用PowerShell播放（无窗口，但只支持WAV）
+                    # 跳过，因为我们需要MP3支持
+                    
+                    # 方法3: 使用subprocess + ffplay（如果可用）
+                    try:
+                        import subprocess
+                        # 尝试使用ffplay（如果系统有ffmpeg）
+                        result = subprocess.run(
+                            ['ffplay', '-nodisp', '-autoexit', '-loglevel', 'quiet', sound_path],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            timeout=5,
+                            creationflags=subprocess.CREATE_NO_WINDOW
+                        )
+                        # 静默播放，不打印成功信息
+                        return
+                    except (FileNotFoundError, subprocess.TimeoutExpired):
+                        pass
+                    except Exception as e2:
+                        print(f"⚠️ ffplay failed: {e2}")
+                    
+                    print("⚠️ All silent playback methods failed")
+                else:
+                    print("⚠️ Unsupported platform for MP3 playback")
+                    
+            except Exception as e:
+                print(f"⚠️ Sound error: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        thread = threading.Thread(target=play_sound, daemon=True)
+        thread.start()

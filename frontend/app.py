@@ -5,13 +5,21 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QIcon, QFont
 from PySide6.QtCore import Qt, QPropertyAnimation, QRect
-import subprocess
 import sys
+import os
 from pathlib import Path
 
+# Support PyInstaller bundled path
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable
+    BASE_DIR = Path(sys._MEIPASS)
+    FRONTEND_DIR = BASE_DIR / 'frontend'
+else:
+    # Running as script
+    BASE_DIR = Path(__file__).resolve().parent
+    FRONTEND_DIR = BASE_DIR
 
-
-sys.path.append(str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(FRONTEND_DIR))
 
 from routes import Route
 
@@ -30,8 +38,40 @@ from pages.faq import FAQPage
 
 from PySide6.QtWidgets import QDialog
 
+# === 后端模块导入（必须在顶层，让PyInstaller正确打包） ===
+# 根据PyInstaller原则：主脚本必须在顶层导入所有需要的模块
+# 这样PyInstaller才能检测并打包backend模块及其所有依赖
+#
+# 关键：必须有无条件的import语句让PyInstaller检测到
+# 即使导入可能失败（开发环境路径问题），也要有import语句
+
+_backend_module = None  # 后端模块的引用
+
+# 尝试导入后端模块（让PyInstaller在打包时检测到依赖）
+# 注意：这里使用try-except，因为开发环境路径可能不同
+# 但import语句本身必须存在，让PyInstaller分析时能检测到
+try:
+    # 开发环境：尝试从父目录导入
+    # 这个import语句让PyInstaller知道需要打包backend/run.py
+    backend_path = Path(__file__).resolve().parent.parent / "backend"
+    if str(backend_path) not in sys.path:
+        sys.path.insert(0, str(backend_path))
+    # 关键：这个import语句必须存在，让PyInstaller检测到
+    import run as backend_run_module  # PyInstaller会分析这个导入
+    _backend_module = backend_run_module
+except (ImportError, ModuleNotFoundError):
+    # 开发环境中可能失败（路径问题），这是正常的
+    # 在打包后，会从_MEIPASS正确导入
+    _backend_module = None
 
 
+
+# Support PyInstaller bundled path
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable
+    APP_DIR = Path(sys._MEIPASS) / 'frontend'
+else:
+    # Running as script
 APP_DIR = Path(__file__).parent
 
 
@@ -294,15 +334,51 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(list(self.pages.keys()).index(Route.HOME))
         
     def start_backend_and_exit(self):
-        """Close the frontend and start the backend run.py."""
-        backend_path = Path(__file__).resolve().parent.parent / "backend" / "run.py"
-        print("🚀 Launching backend:", backend_path)
-
-        # Launch backend in a separate process
-        subprocess.Popen([sys.executable, str(backend_path)], shell=False)
-
-        # Close frontend cleanly
-        QApplication.quit()
+        """
+        关闭前端并启动后端。
+        
+        使用subprocess启动同一个exe，传递--backend参数。
+        这是最简单可靠的方法，避免了multiprocessing的pickle问题和QApplication冲突。
+        """
+        import subprocess
+        
+        try:
+            if getattr(sys, 'frozen', False):
+                # 打包环境：启动同一个exe，传递--backend参数
+                exe_path = Path(sys.executable)  # sys.executable指向exe本身
+                print(f"🚀 Launching backend: {exe_path} --backend")
+                
+                # 启动后端进程（独立进程，避免QApplication冲突）
+                subprocess.Popen([str(exe_path), '--backend'], 
+                               creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0)
+            else:
+                # 开发环境：使用Python运行launcher.py
+                launcher_path = Path(__file__).resolve().parent.parent / "launcher.py"
+                print(f"🚀 Launching backend: python {launcher_path} --backend")
+                
+                subprocess.Popen([sys.executable, str(launcher_path), '--backend'],
+                               creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0)
+            
+            print("✅ Backend process started")
+            
+        except Exception as e:
+            print(f"❌ Failed to start backend: {e}")
+            import traceback
+            traceback.print_exc()
+            # 显示错误消息
+            try:
+                from PySide6.QtWidgets import QMessageBox
+                msg = QMessageBox()
+                msg.setWindowTitle("Backend Error")
+                msg.setText(f"Failed to start backend:\n{str(e)}\n\nCheck console for details.")
+                msg.exec()
+            except:
+                pass
+        
+        # 关闭前端
+        app = QApplication.instance()
+        if app:
+            app.quit()
 
 
 

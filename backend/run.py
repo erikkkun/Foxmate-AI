@@ -24,9 +24,18 @@ from tkinter import ttk
 from pet_ui import FloatingPet
 
 # === 路径与模型 ===
+# Support PyInstaller bundled path
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable
+    BASE_DIR = Path(sys._MEIPASS) / "backend"
+else:
+    # Running as script
 BASE_DIR = Path(__file__).resolve().parent
 BUNDLE_PATH = BASE_DIR / "focus_regressor_sbert.pkl"
 LOG_PATH = BASE_DIR / "activity_log_focus.jsonl"
+
+# === 专注度阈值配置 ===
+FOCUS_THRESHOLD = 40.0  # 专注度低于此值时触发语音提醒（可调整）
 
 # === 加载回归模型 ===
 bundle = joblib.load(BUNDLE_PATH)
@@ -35,6 +44,12 @@ scaler = bundle["numeric_scaler"]
 sbert = SentenceTransformer(bundle["sbert_model_name"])
 
 # === 加载 AI 模型 ===
+# Support PyInstaller bundled path
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable
+    AI_DIR = Path(sys._MEIPASS) / "AI Part"
+else:
+    # Running as script
 AI_DIR = (BASE_DIR / ".." / "AI Part").resolve()
 sys.path.append(str(AI_DIR))
 import importlib.util
@@ -56,6 +71,9 @@ try:
         f.write(json.dumps({"session_start": SESSION_START}, ensure_ascii=False) + "\n")
 except Exception as e:
     print("Session start log failed:", e)
+
+# === 声音提醒 ===
+# 每次专注度低于阈值时播放声音效果
 
 # === 活动窗口信息 ===
 def get_active_window_info():
@@ -171,11 +189,15 @@ def tick(pet: FloatingPet):
         result = ai_model.monitor_activity(entry)
         if result:
             pet.update_message(result["message"])
+            
+            # 检查专注度是否低于阈值，如果是则播放声音效果
+            if score < FOCUS_THRESHOLD:
+                pet.play_alert_sound()
     except Exception as e:
         print("AI 提示失败:", e)
 
     pet.update_by_score(score)
-    print(f"[{entry['ts']}] {app_name} | ks={ks}/min, mouse={mp:.0f}px/min -> {score:.1f}")
+    print(f"[{entry['ts']}] {app_name} | {title} | ks={ks}/min, mouse={mp:.0f}px/min -> {score:.1f}")
 
 # === 生成 Tkinter 报告 ===
 def show_report(scores):
@@ -229,6 +251,7 @@ def show_report(scores):
 
 # === 主程序 ===
 def _run():
+    # 后端在独立进程中运行，直接创建QApplication即可
     qapp = QApplication(sys.argv)
     pet = FloatingPet()
     pet.show()
