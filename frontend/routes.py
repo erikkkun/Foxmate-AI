@@ -12,4 +12,7 @@ class Route(str, Enum):
     FOX = "Your Fox"
     SHOP = "Shop"
     FAQ = "FAQ & Support"
+    WELCOME = "welcome"
+    LAUNCHING = "launching"
+    AUTH = "auth"
 

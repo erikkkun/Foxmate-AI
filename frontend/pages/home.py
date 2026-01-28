@@ -1,25 +1,28 @@
-import sys
+# frontend/pages/home.py
 from pathlib import Path
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
-)
-from PySide6.QtGui import QPainter, QLinearGradient, QColor, QBrush, QPixmap
-from PySide6.QtCore import Qt, QEasingCurve, QPropertyAnimation, QRect
-from PySide6.QtWidgets import QGraphicsDropShadowEffect
 
-# Support PyInstaller bundled path
-if getattr(sys, 'frozen', False):
-    # Running as compiled executable
-    APP_DIR = Path(sys._MEIPASS) / 'frontend'
-else:
-    # Running as script
-    APP_DIR = Path(__file__).resolve().parents[1]
-ASSETS = APP_DIR / "assets"
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame,
+    QSizePolicy, QSpacerItem, QGraphicsDropShadowEffect
+)
+from PySide6.QtCore import Qt, QRect
+from PySide6.QtGui import QFont, QPixmap
 
 
 class HomePage(QWidget):
+    """
+    Warm style home page (match mock #1):
+    - Warm beige gradient background
+    - Big dark-green circle with orange rim
+    - Fox sticker overlapping bottom-right of circle
+    - Bottom creamy card + Weekly Report button
+    """
+
     def __init__(self, on_menu, on_settings, on_close, on_go_fox, on_go_weekly, on_fox_it):
         super().__init__()
+        self.setObjectName("HomePage")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setAutoFillBackground(True)
         self.on_menu = on_menu
         self.on_settings = on_settings
         self.on_close = on_close
@@ -27,194 +30,319 @@ class HomePage(QWidget):
         self.on_go_weekly = on_go_weekly
         self.on_fox_it = on_fox_it
 
-        self.logged_in = False   # 登录状态
+        # allow app.py assign later: home.on_signin = ...
+        self.on_signin = None
 
-        # ========== 顶部按钮 ==========
-        top = QHBoxLayout()
-        self.btn_menu = self._icon_btn("≡");   self.btn_menu.clicked.connect(self.on_menu)
-        self.btn_signin = QPushButton("Sign In")
-        self.btn_signin.setFixedSize(72, 32)
-        self.btn_signin.setCursor(Qt.PointingHandCursor)
-        self.btn_signin.setStyleSheet("""
-            QPushButton {
-                color: #fff; font-size:14px; font-weight:600;
-                border:1px solid rgba(255,255,255,0.6);
-                border-radius: 6px; background: transparent;
-            }
-            QPushButton:hover { background: rgba(255,255,255,0.15); }
-        """)
-        self.btn_signin.clicked.connect(lambda: self.on_signin() if hasattr(self, "on_signin") else None)
-
-        self.btn_settings = self._icon_btn("⚙"); self.btn_settings.clicked.connect(self.on_settings)
-        self.btn_close = self._icon_btn("✕");    self.btn_close.clicked.connect(self.on_close)
-
-        top.addWidget(self.btn_menu)
-        top.addStretch()
-        top.addWidget(self.btn_signin)   # Sign In 默认显示
-        top.addWidget(self.btn_settings)
-        top.addWidget(self.btn_close)
-
-        # ========== 用户信息（默认隐藏） ==========
-        self.avatar = QLabel()
-        self.avatar.setFixedSize(84, 84)
-        self.avatar.setStyleSheet("""
-            QLabel{
-                background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #b2f5ea, stop:1 #7ee0d6);
-                border-radius: 42px; border: 2px solid rgba(0,0,0,0.18);
-            }
-        """)
-        a_shadow = QGraphicsDropShadowEffect(self)
-        a_shadow.setBlurRadius(20)
-        a_shadow.setOffset(0, 2)
-        a_shadow.setColor(QColor(0, 0, 0, 60))
-        self.avatar.setGraphicsEffect(a_shadow)
-
-        self.username = QLabel("Username")
-        self.username.setStyleSheet("color:#fff; font-size:26px; font-weight:800;")
-        self.membership = QLabel("Membership Status: White Fox")
-        self.membership.setStyleSheet("color:rgba(255,255,255,0.9);")
-
-        self.user_block = QVBoxLayout()
-        self.user_block.setSpacing(6)
-        self.user_block.setAlignment(Qt.AlignHCenter)
-        self.user_block.addWidget(self.avatar, alignment=Qt.AlignHCenter)
-        self.user_block.addWidget(self.username, alignment=Qt.AlignHCenter)
-        self.user_block.addWidget(self.membership, alignment=Qt.AlignHCenter)
-
-        # 默认隐藏用户信息
-        self.avatar.hide()
-        self.username.hide()
-        self.membership.hide()
-
-        # ========== 中部 Fox it! 按钮 ==========
-        self.btn_foxit = QPushButton("Fox it!")
-        self.btn_foxit.setCursor(Qt.PointingHandCursor)
-        self.btn_foxit.setStyleSheet("""
-            QPushButton {
-                color:#0f172a; font-size:30px; font-weight:800;
-                border-radius:110px; border:2px solid rgba(0,0,0,0.18);
-                background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #69F0DF, stop:1 #7CE0CF);
-            }
-        """)
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(28)
-        shadow.setOffset(0, 4)
-        shadow.setColor(QColor(0, 0, 0, 90))
-        self.btn_foxit.setGraphicsEffect(shadow)
-
-        self.btn_foxit.clicked.connect(self.on_fox_it)
-        self.btn_foxit.pressed.connect(self._press_anim)
-        self.btn_foxit.released.connect(self._release_anim)
-
-        center = QVBoxLayout()
-        center.addStretch(1)
-        center.addWidget(self.btn_foxit, alignment=Qt.AlignHCenter)
-        center.addStretch(1)
-
-        # ========== 底部 Fox 卡片 ==========
-        card = QFrame(); card.setObjectName("foxCard")
-        card.setStyleSheet("""
-            QFrame#foxCard { background: rgba(0,0,0,0.18); border-radius:20px; }
-            QLabel.title { color:white; font-size:20px; font-weight:700; }
-            QPushButton.pill {
-                background: rgba(0,0,0,0.28); color:white; border:none; border-radius:16px;
-                padding:10px 14px; font-size:16px; font-weight:600;
-            }
-            QPushButton.pill:hover { background: rgba(0,0,0,0.35); }
-        """)
-        card_lay = QHBoxLayout(card)
-
-        fox_img = ASSETS / "fox.png"
-        if fox_img.exists():
-            fox = QLabel(); fox.setPixmap(QPixmap(str(fox_img)).scaled(86, 86, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        else:
-            fox = QLabel("🦊"); fox.setStyleSheet("font-size:48px; color:white;")
-        card.mousePressEvent = lambda e: self.on_go_fox()
-
-        text_col = QVBoxLayout()
-        t1 = QLabel("Your Fox"); t1.setProperty("class","title"); text_col.addWidget(t1)
-        btn_weekly = QPushButton("Weekly Report"); btn_weekly.setProperty("class","pill")
-        btn_weekly.setCursor(Qt.PointingHandCursor); btn_weekly.clicked.connect(self.on_go_weekly)
-        text_col.addWidget(btn_weekly); text_col.addStretch()
-
-        card_lay.addWidget(fox); card_lay.addSpacing(8); card_lay.addLayout(text_col); card_lay.addStretch()
-        card.setFixedHeight(130)
-
-        # ========== 主布局 ==========
+        # ===== Root layout =====
         root = QVBoxLayout(self)
-        root.setContentsMargins(16, 12, 16, 16)
-        root.setSpacing(8)
+        root.setContentsMargins(18, 16, 18, 18)
+        root.setSpacing(14)
+
+        # ===== Top bar =====
+        top = QHBoxLayout()
+        top.setSpacing(10)
+
+        self.btn_menu = QPushButton("☰")
+        self.btn_menu.setObjectName("menuBtn")
+        self.btn_menu.setCursor(Qt.PointingHandCursor)
+        self.btn_menu.clicked.connect(self.on_menu)
+
+        top.addWidget(self.btn_menu, 0, Qt.AlignLeft)
+        top.addStretch(1)
+
+        self.btn_signin = QPushButton("Sign In")
+        self.btn_signin.setObjectName("signinBtn")
+        self.btn_signin.setCursor(Qt.PointingHandCursor)
+        self.btn_signin.clicked.connect(self._handle_signin_clicked)
+        top.addWidget(self.btn_signin, 0, Qt.AlignRight)
+
+        self.btn_settings = QPushButton("⚙")
+        self.btn_settings.setObjectName("settingsBtn")
+        self.btn_settings.setCursor(Qt.PointingHandCursor)
+        self.btn_settings.clicked.connect(self.on_settings)
+        top.addWidget(self.btn_settings, 0, Qt.AlignRight)
+
+        self.btn_close = QPushButton("✕")
+        self.btn_close.setObjectName("closeBtn")
+        self.btn_close.setCursor(Qt.PointingHandCursor)
+        self.btn_close.clicked.connect(self.on_close)
+        top.addWidget(self.btn_close, 0, Qt.AlignRight)
+
         root.addLayout(top)
-        root.addLayout(self.user_block)
-        root.addLayout(center, 1)
-        root.addWidget(card)
 
-    # ---------- 工具方法 ----------
-    def _icon_btn(self, txt):
-        b = QPushButton(txt)
-        b.setFixedSize(32, 32)
-        b.setCursor(Qt.PointingHandCursor)
-        b.setStyleSheet("""
-            QPushButton { color:#fff; font-size:20px; border:none; background:transparent; }
-            QPushButton:hover { background: rgba(255,255,255,0.12); border-radius:8px; }
-        """)
-        return b
+        # ===== Hero area (circle + subtitle + fox sticker overlay) =====
+        root.addItem(QSpacerItem(0, 0, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-    def paintEvent(self, e):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing, True)
-        g = QLinearGradient(0, 0, 0, self.height())
-        g.setColorAt(0.0, QColor("#0c7a7f"))
-        g.setColorAt(1.0, QColor("#19b2a0"))
-        p.fillRect(self.rect(), QBrush(g))
-        super().paintEvent(e)
+        self.hero = QFrame()
+        self.hero.setObjectName("hero")
+        self.hero.setMinimumHeight(360)
+        hero_layout = QVBoxLayout(self.hero)
+        hero_layout.setContentsMargins(0, 0, 0, 0)
+        hero_layout.setSpacing(10)
+        hero_layout.setAlignment(Qt.AlignHCenter)
 
-    def resizeEvent(self, e):
-        d = int(min(self.width(), self.height()) * 0.38)
-        d = max(180, min(d, 260))
-        self.btn_foxit.setFixedSize(d, d)
-        self.btn_foxit.setStyleSheet(self.btn_foxit.styleSheet().replace("border-radius:110px", f"border-radius:{d//2}px"))
-        return super().resizeEvent(e)
+        self.btn_power = QPushButton("Fox it!")
+        self.btn_power.setObjectName("powerBtn")
+        self.btn_power.setCursor(Qt.PointingHandCursor)
+        self.btn_power.setFixedSize(290, 290)
+        self.btn_power.clicked.connect(self.on_fox_it)
 
-    # ---------- 动画 ----------
-    def _press_anim(self):
-        self._foxit_rect_before_press = self.btn_foxit.geometry()
-        r = self._foxit_rect_before_press
-        shrink = max(2, int(r.width() * 0.04))
-        end = QRect(r.x() + shrink, r.y() + shrink, r.width() - 2*shrink, r.height() - 2*shrink)
+        f_btn = QFont()
+        f_btn.setPointSize(28)
+        f_btn.setWeight(QFont.DemiBold)
+        self.btn_power.setFont(f_btn)
 
-        self._anim_foxit = QPropertyAnimation(self.btn_foxit, b"geometry", self)
-        self._anim_foxit.setDuration(90)
-        self._anim_foxit.setEasingCurve(QEasingCurve.OutCubic)
-        self._anim_foxit.setStartValue(r)
-        self._anim_foxit.setEndValue(end)
-        self._anim_foxit.start()
+        # subtle shadow for the big circle
+        shadow = QGraphicsDropShadowEffect(self.btn_power)
+        shadow.setBlurRadius(32)
+        shadow.setOffset(0, 10)
+        shadow.setColor(Qt.black)
+        self.btn_power.setGraphicsEffect(shadow)
 
-    def _release_anim(self):
-        if not hasattr(self, "_foxit_rect_before_press"):
-            return
-        r0 = self._foxit_rect_before_press
-        r = self.btn_foxit.geometry()
+        self.lbl_sub = QLabel("Let's focus together")
+        self.lbl_sub.setObjectName("subtitle")
+        self.lbl_sub.setAlignment(Qt.AlignCenter)
 
-        self._anim_foxit = QPropertyAnimation(self.btn_foxit, b"geometry", self)
-        self._anim_foxit.setDuration(120)
-        self._anim_foxit.setEasingCurve(QEasingCurve.OutBack)
-        self._anim_foxit.setStartValue(r)
-        self._anim_foxit.setEndValue(r0)
-        self._anim_foxit.start()
+        hero_layout.addWidget(self.btn_power, 0, Qt.AlignHCenter)
+        hero_layout.addWidget(self.lbl_sub, 0, Qt.AlignHCenter)
 
-    # ---------- 登录状态切换 ----------
-    def update_login_ui(self, logged_in: bool, username=None, membership=None):
-        self.logged_in = logged_in
-        if logged_in:
-            self.btn_signin.hide()
-            self.avatar.show()
-            self.username.setText(username or "Username")
-            self.username.show()
-            self.membership.setText(membership or "Membership Status: White Fox")
-            self.membership.show()
+        # fox sticker overlay (absolute-positioned inside hero)
+        self.fox_sticker = QLabel(self.hero)
+        self.fox_sticker.setObjectName("foxSticker")
+        self.fox_sticker.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+        # Try load fox image if exists: frontend/assets/fox_sticker.png (or .jpg)
+        assets_dir = Path(__file__).resolve().parent.parent / "assets"
+        candidates = [
+            assets_dir / "fox_sticker.png",
+            assets_dir / "fox_sticker.jpg",
+            assets_dir / "fox_sticker.webp",
+        ]
+        self._fox_pixmap = None
+        for p in candidates:
+            if p.exists():
+                pm = QPixmap(str(p))
+                if not pm.isNull():
+                    self._fox_pixmap = pm
+                    break
+
+        if self._fox_pixmap:
+            # scale later in _layout_fox()
+            self.fox_sticker.setPixmap(self._fox_pixmap)
+            self.fox_sticker.setScaledContents(True)
         else:
-            self.btn_signin.show()
-            self.avatar.hide()
-            self.username.hide()
-            self.membership.hide()
+            # fallback
+            self.fox_sticker.setText("🦊")
+            self.fox_sticker.setAlignment(Qt.AlignCenter)
+
+        root.addWidget(self.hero)
+
+        root.addItem(QSpacerItem(0, 0, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+        # ===== Bottom card =====
+        self.card = QFrame()
+        self.card.setObjectName("bottomCard")
+        card_layout = QHBoxLayout(self.card)
+        card_layout.setContentsMargins(16, 14, 16, 14)
+        card_layout.setSpacing(12)
+
+        self.lbl_fox = QLabel()
+        self.lbl_fox.setObjectName("foxIcon")
+        self.lbl_fox.setFixedSize(46, 46)
+        self.lbl_fox.setAlignment(Qt.AlignCenter)
+
+        assets_dir = Path(__file__).resolve().parent.parent / "assets"
+        icon_candidates = [
+            assets_dir / "fox_icon.png",
+            assets_dir / "fox_icon.jpg",
+            assets_dir / "fox_icon.webp",
+        ]
+        pm = None
+        for p in icon_candidates:
+            if p.exists():
+                t = QPixmap(str(p))
+                if not t.isNull():
+                    pm = t
+                    break
+
+        if pm:
+            self.lbl_fox.setPixmap(pm.scaled(
+                46, 46,
+                Qt.KeepAspectRatioByExpanding,
+                Qt.SmoothTransformation
+            ))
+            self.lbl_fox.setScaledContents(True)
+        else:
+            self.lbl_fox.setText("🦊")
+
+        right = QVBoxLayout()
+        right.setSpacing(6)
+
+        self.lbl_title = QLabel("Your Fox")
+        self.lbl_title.setObjectName("cardTitle")
+
+        self.btn_weekly = QPushButton("Weekly Report")
+        self.btn_weekly.setObjectName("weeklyBtn")
+        self.btn_weekly.setCursor(Qt.PointingHandCursor)
+        self.btn_weekly.clicked.connect(self.on_go_weekly)
+
+        right.addWidget(self.lbl_title)
+        right.addWidget(self.btn_weekly, 0, Qt.AlignLeft)
+
+        card_layout.addWidget(self.lbl_fox)
+        card_layout.addLayout(right)
+        card_layout.addStretch(1)
+
+        # card shadow
+        card_shadow = QGraphicsDropShadowEffect(self.card)
+        card_shadow.setBlurRadius(26)
+        card_shadow.setOffset(0, 10)
+        card_shadow.setColor(Qt.black)
+        self.card.setGraphicsEffect(card_shadow)
+
+        root.addWidget(self.card)
+
+        # ===== Styles (match mock #1) =====
+        self.setStyleSheet("""
+        QWidget#HomePage {
+    background: qlineargradient(
+        x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FFF6E8,
+        stop:0.45 #FBE7CF,
+        stop:0.85 #F6D5A8,
+        stop:1 #F3C98D
+    );
+}
+
+        /* Top buttons */
+        QPushButton#menuBtn {
+            width: 46px; height: 46px;
+            border-radius: 23px;
+            border: none;
+            background: #F39A2D;  /* orange */
+            color: white;
+            font-size: 18px;
+        }
+        QPushButton#menuBtn:hover { background: #F6A94A; }
+
+        QPushButton#signinBtn {
+            padding: 10px 18px;
+            border-radius: 16px;
+            border: 2px solid rgba(243, 154, 45, 0.70);
+            background: rgba(255,255,255,0.75);
+            color: #1C5B45;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        QPushButton#signinBtn:hover { background: rgba(255,255,255,0.92); }
+
+        QPushButton#settingsBtn, QPushButton#closeBtn {
+            width: 46px; height: 46px;
+            border-radius: 16px;
+            border: none;
+            background: rgba(255,255,255,0.70);
+            color: #F39A2D;
+            font-size: 18px;
+        }
+        QPushButton#settingsBtn:hover, QPushButton#closeBtn:hover {
+            background: rgba(255,255,255,0.92);
+        }
+
+        /* Big circle button */
+        QPushButton#powerBtn {
+            border-radius: 145px;
+            border: 10px solid #F39A2D;    /* orange rim */
+            background: #214F3D;          /* deep green */
+            color: #F6EAD3;               /* warm off-white */
+        }
+        QPushButton#powerBtn:hover {
+            background: #1E4738;
+        }
+        QPushButton#powerBtn:pressed {
+            background: #193D30;
+        }
+
+        QLabel#subtitle {
+            color: rgba(255, 245, 232, 0.88);
+            font-size: 14px;
+            letter-spacing: 0.6px;
+        }
+
+        /* bottom card */
+        QFrame#bottomCard {
+            border-radius: 22px;
+            background: rgba(255, 246, 232, 0.86);
+            border: 1px solid rgba(0,0,0,0.06);
+        }
+        QLabel#cardTitle {
+            color: #1C5B45;
+            font-size: 22px;
+            font-weight: 700;
+        }
+        QLabel#foxIcon {
+        background: transparent;
+        border: none;
+        border-radius: 16px;
+        }
+
+        QPushButton#weeklyBtn {
+            padding: 10px 14px;
+            border-radius: 16px;
+            border: 1px solid rgba(28, 91, 69, 0.18);
+            background: rgba(179, 227, 211, 0.70); /* mint */
+            color: #214F3D;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        QPushButton#weeklyBtn:hover {
+            background: rgba(179, 227, 211, 0.90);
+        }
+
+        /* fox sticker fallback (emoji) */
+        QLabel#foxSticker {
+            color: #F39A2D;
+            font-size: 72px;
+        }
+        """)
+
+        # initial layout of fox sticker
+        self._layout_fox()
+
+    # keep fox overlay pinned to bottom-right of the big circle
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._layout_fox()
+
+    def _layout_fox(self):
+        if not self.hero or not self.btn_power:
+            return
+
+        btn_geo = self.btn_power.geometry()
+
+        # 你要多大就改这里：240/260 都行
+        w, h = 240, 240
+
+        self.fox_sticker.setFixedSize(w, h)
+
+        # ✅ 关键：按 label 尺寸缩放图片（否则改 w/h 看起来不会变）
+        if self._fox_pixmap:
+            pm = self._fox_pixmap.scaled(
+                w, h,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+            self.fox_sticker.setPixmap(pm)
+            self.fox_sticker.setScaledContents(False)  # 我们已经手动缩放了，不需要它
+
+        # 位置：压在圆右下角（你可以微调 0.72 / 0.78）
+        x = btn_geo.x() + btn_geo.width() - int(w * 0.72)
+        y = btn_geo.y() + btn_geo.height() - int(h * 0.78)
+        self.fox_sticker.move(x, y)
+
+    # ===== public API used by app.py =====
+    def update_login_ui(self, logged_in: bool, username: str, membership: str):
+        self.btn_signin.setText(username if logged_in else "Sign In")
+
+    def _handle_signin_clicked(self):
+        if callable(self.on_signin):
+            self.on_signin()
