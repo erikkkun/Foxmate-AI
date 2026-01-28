@@ -1,13 +1,16 @@
 # frontend/pages/launching.py
+import sys
+
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont
-
+from pathlib import Path
+from PySide6.QtGui import QPixmap
 
 class LaunchingPage(QWidget):
     """
     白底极简等待页（类似你发的示例）
-    - 中间"狐狸"
+    - 中间“狐狸”
     - 下方小 loading 圆圈（用进度条伪装成 spinner）
     - 文案：正在加载中，请稍后
     """
@@ -22,8 +25,27 @@ class LaunchingPage(QWidget):
         root.addStretch(6)
 
         # ===== 狐狸（先用emoji占位，之后你换成图片也很简单）=====
-        fox = QLabel("🦊")
+        fox = QLabel()
+        fox.setObjectName("bottombage")
         fox.setAlignment(Qt.AlignCenter)
+        fox.setStyleSheet("background: transparent;")
+
+        # 兼容 PyInstaller / 本地运行路径
+        if getattr(sys, "frozen", False):
+            base_dir = Path(sys._MEIPASS) / "frontend"
+        else:
+            base_dir = Path(__file__).resolve().parents[1]  # .../frontend
+
+        img_path = base_dir / "assets" / "fox.png"  # <- 这里改成你的真实文件名
+        pix = QPixmap(str(img_path))
+
+        if not pix.isNull():
+            # 你可以调这个大小，比如 140 / 160 / 200
+            pix = pix.scaled(160, 160, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            fox.setPixmap(pix)
+        else:
+            fox.setText("🦊")  # 找不到图片时 fallback
+            fox.setStyleSheet("font-size: 64px; background: transparent;")
         fox_font = QFont()
         fox_font.setPointSize(64)          # 控制狐狸大小
         fox.setFont(fox_font)
@@ -51,7 +73,7 @@ class LaunchingPage(QWidget):
         root.addSpacing(14)
 
         # ===== 文案 =====
-        text = QLabel("正在加载中，请稍后")
+        text = QLabel("Loading")
         text.setAlignment(Qt.AlignCenter)
         text_font = QFont()
         text_font.setPointSize(14)
