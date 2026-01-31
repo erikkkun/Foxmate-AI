@@ -9,6 +9,8 @@ import os
 import tempfile
 from pathlib import Path
 
+from pages.dress_up_preview import DressUpPreviewPage  # ✅ 用预览占位页
+
 # Support PyInstaller bundled path
 if getattr(sys, 'frozen', False):
     BASE_DIR = Path(sys._MEIPASS)
@@ -33,26 +35,6 @@ from pages.welcome import WelcomePage
 from pages.launching import LaunchingPage
 from pages.auth import AuthPage
 
-
-# === Backend module import (for PyInstaller) ===
-_backend_module = None
-try:
-    backend_path = Path(__file__).resolve().parent.parent / "backend"
-    if str(backend_path) not in sys.path:
-        sys.path.insert(0, str(backend_path))
-    import run as backend_run_module  # PyInstaller will detect
-    _backend_module = backend_run_module
-except (ImportError, ModuleNotFoundError):
-    _backend_module = None
-
-
-# Support PyInstaller bundled path
-if getattr(sys, 'frozen', False):
-    APP_DIR = Path(sys._MEIPASS) / 'frontend'
-else:
-    APP_DIR = Path(__file__).parent
-
-
 class Overlay(QWidget):
     """半透明遮罩（点击可关闭 Drawer）"""
     def __init__(self, parent, on_click):
@@ -65,17 +47,11 @@ class Overlay(QWidget):
     def mousePressEvent(self, e):
         if self.isVisible():
             self.on_click()
-
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setFixedSize(420, 750)
         self.setWindowTitle("")
-
-        icon = APP_DIR / "assets" / "icon.ico"
-        if icon.exists():
-            self.setWindowIcon(QIcon(str(icon)))
 
         # ===== stack =====
         self.stack = QStackedWidget(self)
@@ -89,16 +65,25 @@ class MainWindow(QMainWindow):
             on_menu=self.toggle_menu,
             on_settings=lambda: goto(Route.SETTINGS),
             on_close=self.close,
-            on_go_fox=lambda: goto(Route.FOX) if Route.FOX in self.pages else goto(Route.HOME),
+            on_go_fox=lambda: goto(Route.HOME),
             on_go_weekly=lambda: goto(Route.WEEKLY),
-            on_fox_it=lambda: self.start_backend_and_exit()
+            on_fox_it=lambda: self.start_backend_and_exit(),
         )
         home.on_signin = lambda: goto(Route.AUTH)
+
+        # ✅ 关键：Home 里点击 GIF 会调用这个回调
+        home.on_go_dressup = lambda: goto(Route.DRESS_UP)
 
         self.pages: dict[Route, QWidget] = {
             Route.WELCOME: WelcomePage(),
             Route.LAUNCHING: LaunchingPage(),
             Route.HOME: home,
+
+            # ✅ 关键：先用预览页占位（显示图片 + back）
+            Route.DRESS_UP: DressUpPreviewPage(
+                on_back=lambda: goto(Route.HOME)
+            ),
+
             Route.AUTH: AuthPage(
                 on_back=lambda: goto(Route.HOME),
                 on_login_success=self._on_login_success
@@ -139,7 +124,6 @@ class MainWindow(QMainWindow):
         for _, page in self.pages.items():
             self.stack.addWidget(page)
 
-        # start: welcome -> home after 3s
         self.stack.setCurrentIndex(0)
         QTimer.singleShot(3000, lambda: goto(Route.HOME))
 
